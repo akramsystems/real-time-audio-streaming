@@ -1,6 +1,12 @@
 import { AudioConfig } from ".";
 // WebSocket Message Types
-export type WebSocketMessage = ConfigMessage | TranscriptionMessage | ErrorMessage | StatusMessage;
+export type WebSocketMessage = 
+    | ConfigMessage 
+    | TranscriptionMessage 
+    | ErrorMessage 
+    | StatusMessage 
+    | AudioMessage 
+    | EndMessage;
 
 export interface ConfigMessage {
     type: 'config';
@@ -20,6 +26,15 @@ export interface ErrorMessage {
 export interface StatusMessage {
     type: 'status';
     status: 'ready' | 'processing' | 'stopped';
+}
+
+export interface AudioMessage {
+    type: 'audio';
+    data: string; // base64 encoded audio data
+}
+
+export interface EndMessage {
+    type: 'end';
 }
 
 // Server Configuration Types

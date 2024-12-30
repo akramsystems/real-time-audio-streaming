@@ -1,89 +1,128 @@
 import { WebSocket } from "ws";
 import { 
     AudioConfig, 
-    WebSocketMessage, 
+    WebSocketMessage,
     ConfigMessage,
     StatusMessage,
     ErrorMessage 
 } from "../types";
 import AudioStreamManager from "./manager";
 
-function createStatusMessage(status: StatusMessage['status']): StatusMessage {
-    return { type: 'status', status };
-}
-
-function createErrorMessage(error: string): ErrorMessage {
-    return { type: 'error', error };
-}
-
-export async function handleWebSocketConnection(ws: WebSocket): Promise<void> {
-    const streamManager = AudioStreamManager.getInstance();
-    const state: {
-        isConfigured: boolean;
-    } = {
+class WebSocketHandler {
+    private ws: WebSocket;
+    private streamManager: AudioStreamManager;
+    private state = {
         isConfigured: false
     };
 
-    const handleConfig = async (config: ConfigMessage) => {
+    constructor(ws: WebSocket) {
+        this.ws = ws;
+        this.streamManager = AudioStreamManager.getInstance();
+        this.initialize();
+    }
+
+    private initialize(): void {
+        this.ws.on("message", this.handleMessage.bind(this));
+        this.ws.on("close", this.handleClose.bind(this));
+        this.ws.on("error", this.handleError.bind(this));
+    }
+
+    private async handleMessage(message: Buffer): Promise<void> {
         try {
-            console.log("Starting config handling...");
-            const audioConfig = config.audio;
-            
-            if (!isValidAudioConfig(audioConfig)) {
+            const parsedMessage = this.parseMessage(message);
+            await this.routeMessage(parsedMessage);
+        } catch (error) {
+            this.sendError("Failed to process message");
+        }
+    }
+
+    private parseMessage(message: Buffer): WebSocketMessage {
+        try {
+            return JSON.parse(message.toString());
+        } catch {
+            throw new Error("Invalid message format");
+        }
+    }
+
+    private async routeMessage(message: WebSocketMessage): Promise<void> {
+        switch (message.type) {
+            case 'config':
+                await this.handleConfig(message as ConfigMessage);
+                break;
+            case 'audio':
+                await this.handleAudio(message);
+                break;
+            case 'end':
+                await this.handleEnd();
+                break;
+            default:
+                this.sendError("Unknown message type");
+        }
+    }
+
+    private async handleConfig(config: ConfigMessage): Promise<void> {
+        try {
+            if (!this.isValidAudioConfig(config.audio)) {
                 throw new Error("Invalid audio configuration");
             }
 
-            await streamManager.startStream(audioConfig);
-            state.isConfigured = true;
-            
-            ws.send(JSON.stringify(createStatusMessage('ready')));
+            await this.streamManager.startStream(config.audio);
+            this.state.isConfigured = true;
+            this.sendStatus('ready');
         } catch (error) {
-            ws.send(JSON.stringify(createErrorMessage('Failed to process configuration')));
-            ws.close();
+            this.sendError('Failed to process configuration');
+            this.ws.close();
         }
-    };
+    }
 
-    ws.on("message", async (message: Buffer) => {
+    private async handleAudio(message: any): Promise<void> {
+        if (!this.state.isConfigured) {
+            this.sendError("Configuration required before sending audio");
+            return;
+        }
+
+        const audioBuffer = Buffer.from(message.data, 'base64');
+        await this.streamManager.processAudioChunk(audioBuffer);
+    }
+
+    private async handleEnd(): Promise<void> {
+        await this.streamManager.stopStream();
+    }
+
+    private async handleClose(): Promise<void> {
         try {
-            const jsonMessage = JSON.parse(message.toString());
-            
-            if (jsonMessage.type === 'config' && jsonMessage.audio) {
-                await handleConfig(jsonMessage);
-                return;
-            }
-            
-            if (jsonMessage.type === 'audio' && jsonMessage.data) {
-                if (!state.isConfigured) {
-                    ws.send(JSON.stringify({ error: "Configuration required before sending audio" }));
-                    return;
-                }
-                // Convert base64 back to buffer
-                const audioBuffer = Buffer.from(jsonMessage.data, 'base64');
-                await streamManager.processAudioChunk(audioBuffer);
-                return;
-            }
-
-            if (jsonMessage.type === 'end') {
-                await streamManager.stopStream();
-                return;
+            if (this.streamManager.isStreamActive()) {
+                await this.streamManager.stopStream();
             }
         } catch (error) {
-            console.error("Error processing message:", error);
-            ws.send(JSON.stringify({ error: "Failed to process message" }));
+            console.error("Error during cleanup:", error);
         }
-    });
+    }
 
-    ws.on("close", async () => {
-        try {
-            if (streamManager.isStreamActive()) {
-                await streamManager.stopStream();
-            }
-        } catch (error) {
-            console.error("Error closing stream:", error);
+    private handleError(error: Error): void {
+        console.error("WebSocket error:", error);
+        this.sendError("Internal server error");
+    }
+
+    private sendStatus(status: StatusMessage['status']): void {
+        this.send({ type: 'status', status });
+    }
+
+    private sendError(error: string): void {
+        this.send({ type: 'error', error });
+    }
+
+    private send(message: WebSocketMessage): void {
+        if (this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify(message));
         }
-    });
+    }
+
+    private isValidAudioConfig(config: AudioConfig): boolean {
+        return !!(config?.sampleRate && config?.channels && config?.encoding);
+    }
 }
 
-function isValidAudioConfig(config: AudioConfig): boolean {
-    return !!(config.sampleRate && config.channels && config.encoding);
+export function createWebSocketHandler(ws: WebSocket): void {
+    new WebSocketHandler(ws);
 }
