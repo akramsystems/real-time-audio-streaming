@@ -12,7 +12,7 @@ const WEBSOCKET_URL = "ws://localhost:8080";
 
 const DEFAULT_STREAM_CONFIG: AudioStreamConfig = {
     chunkSize: 1024,
-    streamIntervalMs: 200,
+    streamIntervalMs: 10,
     audioFilePath: path.join(__dirname, "audio/test-audio.wav")
 };
 
@@ -53,6 +53,10 @@ async function mimicAudioStream(
             startAudioStream(ws);
         } else if (response.transcription) {
             console.log("Transcription:", response.transcription);
+        } else if (response.type === 'final_transcriptions') {
+            console.log("Complete transcript:", response.transcriptions.join(" "));
+        } else if (response.answer) {
+            console.log("AI Answer:", response.answer);
         } else if (response.error) {
             console.error("Error from server:", response.error);
         }

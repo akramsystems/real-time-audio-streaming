@@ -16,7 +16,7 @@ export interface StreamHandler {
 
 export interface StreamManager {
     startStream(config: AudioConfig): Promise<void>;
-    stopStream(): Promise<void>;
+    stopStream(): Promise<string[]>;
     pauseStream(): Promise<void>;
     resumeStream(): Promise<void>;
 }

@@ -6,7 +6,8 @@ export type WebSocketMessage =
     | ErrorMessage 
     | StatusMessage 
     | AudioMessage 
-    | EndMessage;
+    | EndMessage
+    | FinalTranscriptionsMessage;
 
 export interface ConfigMessage {
     type: 'config';
@@ -48,4 +49,10 @@ export interface AudioStreamConfig {
     chunkSize: number;
     streamIntervalMs: number;
     audioFilePath: string;
+}
+
+
+export interface FinalTranscriptionsMessage {
+    type: 'final_transcriptions';
+    transcriptions: string[];
 }

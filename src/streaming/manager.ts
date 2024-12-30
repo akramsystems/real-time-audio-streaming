@@ -5,6 +5,7 @@ class AudioStreamManager implements StreamManager {
     private isActive: boolean = false;
     private currentConfig: AudioConfig | null = null;
     private sttHandler: STTHandler | null = null;
+    private transcriptions: string[] = [];
 
     private static instance: AudioStreamManager | null = null;
 
@@ -36,6 +37,7 @@ class AudioStreamManager implements StreamManager {
     }
 
     private handleTranscription(text: string): void {
+        this.transcriptions.push(text);
         const message: TranscriptionMessage = {
             type: 'transcription',
             transcription: text
@@ -52,7 +54,7 @@ class AudioStreamManager implements StreamManager {
         await this.sttHandler.sendAudioChunk(chunk);
     }
 
-    async stopStream(): Promise<void> {
+    async stopStream(): Promise<string[]> {
         if (!this.isActive) throw new Error("No active stream to stop.");
         if (this.sttHandler) {
             await this.sttHandler.close();
@@ -60,7 +62,10 @@ class AudioStreamManager implements StreamManager {
         }
         this.isActive = false;
         this.currentConfig = null;
+        const finalTranscriptions = this.transcriptions;
+        this.transcriptions = []; // Clear for next session
         console.log("Stream stopped.");
+        return finalTranscriptions;
     }
 
     async pauseStream(): Promise<void> {
@@ -78,6 +83,10 @@ class AudioStreamManager implements StreamManager {
 
     isStreamActive(): boolean {
         return this.isActive;
+    }
+
+    public getAllTranscriptions(): string[] {
+        return this.transcriptions;
     }
 }
 

@@ -86,7 +86,12 @@ class WebSocketHandler {
     }
 
     private async handleEnd(): Promise<void> {
-        await this.streamManager.stopStream();
+        const transcriptions = await this.streamManager.stopStream();
+        this.send({
+            type: 'final_transcriptions',
+            transcriptions: transcriptions
+        });
+        return;
     }
 
     private async handleClose(): Promise<void> {
