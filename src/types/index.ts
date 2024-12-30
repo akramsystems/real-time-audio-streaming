@@ -5,9 +5,7 @@ export interface AudioConfig {
 }
 
 export enum AudioEncoding {
-    AAC = 'AAC',
     WAV = 'WAV',
-    MP3 = 'MP3'
 }
 
 

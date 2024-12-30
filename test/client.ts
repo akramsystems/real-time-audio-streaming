@@ -13,13 +13,13 @@ const WEBSOCKET_URL = "ws://localhost:8080";
 const DEFAULT_STREAM_CONFIG: AudioStreamConfig = {
     chunkSize: 1024,
     streamIntervalMs: 200,
-    audioFilePath: path.join(__dirname, "audio/test-audio.mp3")
+    audioFilePath: path.join(__dirname, "audio/test-audio.wav")
 };
 
 const DEFAULT_AUDIO_CONFIG: AudioConfig = {
     sampleRate: 16000,
     channels: 1,
-    encoding: AudioEncoding.MP3
+    encoding: AudioEncoding.WAV
 };
 
 function createConfigMessage(): ConfigMessage {
