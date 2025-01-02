@@ -3,21 +3,26 @@ import {
     AudioConfig, 
     WebSocketMessage,
     ConfigMessage,
-    StatusMessage,
-    ErrorMessage 
+    ErrorMessage,
+    AiResponseMessage,
+    AudioChunkMessage,
+    EndAudioChunkMessage
 } from "../types";
+import { processTranscription } from "../services/openai";
+import { StreamHandler } from "../types";
 import AudioStreamManager from "./manager";
+import { streamTTS } from "../services/tts";
 
-class WebSocketHandler {
+class WebSocketHandler implements StreamHandler {
     private ws: WebSocket;
-    private streamManager: AudioStreamManager;
+    private audioStreamManager: AudioStreamManager;
     private state = {
         isConfigured: false
     };
 
     constructor(ws: WebSocket) {
         this.ws = ws;
-        this.streamManager = AudioStreamManager.getInstance();
+        this.audioStreamManager = AudioStreamManager.getInstance();
         this.initialize();
     }
 
@@ -25,6 +30,54 @@ class WebSocketHandler {
         this.ws.on("message", this.handleMessage.bind(this));
         this.ws.on("close", this.handleClose.bind(this));
         this.ws.on("error", this.handleError.bind(this));
+    }
+
+    async handleAudioChunk(message: any): Promise<void> {
+        if (!this.state.isConfigured) {
+            this.sendError("Configuration required before sending audio");
+            return;
+        }
+
+        const audioBuffer = Buffer.from(message.data, 'base64');
+        await this.audioStreamManager.processAudioChunk(audioBuffer);
+    }
+
+    async handleTranscription(): Promise<void> {
+        const transcriptions = await this.audioStreamManager.stopStream();
+        
+        this.send({
+            type: 'final_transcriptions',
+            transcriptions: transcriptions
+        });
+
+        const combinedTranscription = transcriptions.join(" ");
+
+        try {
+            const aiResponse = await processTranscription(combinedTranscription);
+            this.send({
+                type: 'ai_response',
+                response: aiResponse
+            });
+
+            const ttsHandler = await streamTTS(combinedTranscription);
+            
+            ttsHandler.on('audio', (audioData: Buffer) => {
+                this.ws.send(JSON.stringify({
+                    type: 'audio',
+                    data: audioData.toString('base64')
+                }));
+            });
+
+            ttsHandler.on('close', () => {
+                console.log("TTS process completed and connection closed.");
+            });
+
+            
+              
+        } catch (error) {
+            console.error("Error processing transcription with OpenAI:", error);
+            this.sendError("Failed to process transcription with OpenAI");
+        }
     }
 
     private async handleMessage(message: Buffer): Promise<void> {
@@ -46,14 +99,14 @@ class WebSocketHandler {
 
     private async routeMessage(message: WebSocketMessage): Promise<void> {
         switch (message.type) {
-            case 'config':
+            case 'initial_config':
                 await this.handleConfig(message as ConfigMessage);
                 break;
-            case 'audio':
-                await this.handleAudio(message);
+            case 'audio_chunk_input':
+                await this.handleAudioChunk(message);
                 break;
-            case 'end':
-                await this.handleEnd();
+            case 'end_audio_chunk_input':
+                await this.handleTranscription();
                 break;
             default:
                 this.sendError("Unknown message type");
@@ -65,39 +118,20 @@ class WebSocketHandler {
             if (!this.isValidAudioConfig(config.audio)) {
                 throw new Error("Invalid audio configuration");
             }
-
-            await this.streamManager.startStream(config.audio);
+            await this.audioStreamManager.startStream(config.audio);
             this.state.isConfigured = true;
-            this.sendStatus('ready');
+            this.send({ type: 'start_audio_upload' });
         } catch (error) {
             this.sendError('Failed to process configuration');
             this.ws.close();
         }
     }
 
-    private async handleAudio(message: any): Promise<void> {
-        if (!this.state.isConfigured) {
-            this.sendError("Configuration required before sending audio");
-            return;
-        }
-
-        const audioBuffer = Buffer.from(message.data, 'base64');
-        await this.streamManager.processAudioChunk(audioBuffer);
-    }
-
-    private async handleEnd(): Promise<void> {
-        const transcriptions = await this.streamManager.stopStream();
-        this.send({
-            type: 'final_transcriptions',
-            transcriptions: transcriptions
-        });
-        return;
-    }
 
     private async handleClose(): Promise<void> {
         try {
-            if (this.streamManager.isStreamActive()) {
-                await this.streamManager.stopStream();
+            if (this.audioStreamManager.isStreamActive()) {
+                await this.audioStreamManager.stopStream();
             }
         } catch (error) {
             console.error("Error during cleanup:", error);
@@ -109,9 +143,6 @@ class WebSocketHandler {
         this.sendError("Internal server error");
     }
 
-    private sendStatus(status: StatusMessage['status']): void {
-        this.send({ type: 'status', status });
-    }
 
     private sendError(error: string): void {
         this.send({ type: 'error', error });

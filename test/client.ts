@@ -7,6 +7,7 @@ import {
     AudioStreamConfig,
     AudioEncoding 
 } from "../src/types";
+import { EventEmitter } from "events";
 
 const WEBSOCKET_URL = "ws://localhost:8080";
 
@@ -24,15 +25,14 @@ const DEFAULT_AUDIO_CONFIG: AudioConfig = {
 
 function createConfigMessage(): ConfigMessage {
     return {
-        type: 'config',
+        type: 'initial_config',
         audio: DEFAULT_AUDIO_CONFIG
     };
 }
 
-async function mimicAudioStream(
-) {
+async function mimicAudioStream() {
     const ws = new WebSocket(WEBSOCKET_URL);
-    let isReady = false;
+    const writeStream = fs.createWriteStream("output.mp3");
 
     ws.on("open", () => {
         console.log("Connected to the WebSocket server.");
@@ -43,26 +43,21 @@ async function mimicAudioStream(
         ws.send(JSON.stringify(audioConfig));
     });
 
-    ws.on("message", (data) => {
+    ws.on("message", (data: Buffer) => {
         const response = JSON.parse(data.toString());
-        console.log("Received server response:", response);
-
-        if (response.status === "ready") {
-            console.log("Server confirmed ready status, starting audio stream...");
-            isReady = true;
-            startAudioStream(ws);
-        } else if (response.transcription) {
-            console.log("Transcription:", response.transcription);
-        } else if (response.type === 'final_transcriptions') {
-            console.log("Complete transcript:", response.transcriptions.join(" "));
-        } else if (response.answer) {
-            console.log("AI Answer:", response.answer);
+        if (response.type === "start_audio_upload") {
+            startAudioUploadStream(ws);
+        } else if (response.type === 'audio') {
+            const audioBuffer = Buffer.from(response.data, "base64");
+            writeStream.write(audioBuffer);
+            console.log("Audio saved to output.mp3");
         } else if (response.error) {
             console.error("Error from server:", response.error);
         }
     });
 
     ws.on("close", () => {
+        writeStream.end();
         console.log("WebSocket connection closed.");
     });
 
@@ -71,26 +66,25 @@ async function mimicAudioStream(
     });
 }
 
-function startAudioStream(ws: WebSocket) {
-    console.log("Starting audio stream...");
+function startAudioUploadStream(ws: WebSocket) {
+    console.log("Starting audio upload stream...");
     const audioFile = fs.readFileSync(DEFAULT_STREAM_CONFIG.audioFilePath);
     let offset = 0;
 
     const streamInterval = setInterval(() => {
         if (offset >= audioFile.length) {
-            console.log("Audio streaming completed");
+            console.log("Completed audio upload stream");
             clearInterval(streamInterval);
-            ws.send(JSON.stringify({ type: 'end' }));
+            ws.send(JSON.stringify({ type: 'end_audio_chunk_input' }));
             return;
         }
 
         const chunk = audioFile.slice(offset, offset + DEFAULT_STREAM_CONFIG.chunkSize);
-        const audioMessage = {
-            type: 'audio',
+        const AudioChunkMessage = {
+            type: 'audio_chunk_input',
             data: chunk.toString('base64')
         };
-        console.log(`Sending chunk of size ${chunk.length} at offset ${offset}`);
-        ws.send(JSON.stringify(audioMessage));
+        ws.send(JSON.stringify(AudioChunkMessage));
         offset += DEFAULT_STREAM_CONFIG.chunkSize;
     }, DEFAULT_STREAM_CONFIG.streamIntervalMs);
 }

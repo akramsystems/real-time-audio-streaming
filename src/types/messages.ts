@@ -4,13 +4,14 @@ export type WebSocketMessage =
     | ConfigMessage 
     | TranscriptionMessage 
     | ErrorMessage 
-    | StatusMessage 
-    | AudioMessage 
-    | EndMessage
-    | FinalTranscriptionsMessage;
+    | StartAudioUploadMessage
+    | AudioChunkMessage 
+    | EndAudioChunkMessage
+    | FinalTranscriptionsMessage
+    | AiResponseMessage;
 
 export interface ConfigMessage {
-    type: 'config';
+    type: 'initial_config';
     audio: AudioConfig;
 }
 
@@ -19,23 +20,27 @@ export interface TranscriptionMessage {
     transcription: string;
 }
 
+export interface AiResponseMessage {
+    type: 'ai_response';
+    response: string;
+}
+
 export interface ErrorMessage {
     type: 'error';
     error: string;
 }
 
-export interface StatusMessage {
-    type: 'status';
-    status: 'ready' | 'processing' | 'stopped';
+export interface StartAudioUploadMessage {
+    type: 'start_audio_upload';
 }
 
-export interface AudioMessage {
-    type: 'audio';
+export interface AudioChunkMessage {
+    type: 'audio_chunk_input';
     data: string; // base64 encoded audio data
 }
 
-export interface EndMessage {
-    type: 'end';
+export interface EndAudioChunkMessage {
+    type: 'end_audio_chunk_input';
 }
 
 // Server Configuration Types

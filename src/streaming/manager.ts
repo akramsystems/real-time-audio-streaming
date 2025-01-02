@@ -1,6 +1,7 @@
 import { StreamManager, AudioConfig, TranscriptionMessage } from "../types";
 import { streamSTT } from "../services/stt";
 
+
 class AudioStreamManager implements StreamManager {
     private isActive: boolean = false;
     private currentConfig: AudioConfig | null = null;
@@ -18,6 +19,18 @@ class AudioStreamManager implements StreamManager {
 
     private constructor() {}
 
+
+    private handleTranscription(text: string): void {
+        this.transcriptions.push(text);
+    }
+
+    async processAudioChunk(chunk: Buffer): Promise<void> {
+        if (!this.isActive) throw new Error("Stream is not active.");
+        if (!this.sttHandler) throw new Error("STT handler not initialized.");
+        
+        await this.sttHandler.sendAudioChunk(chunk);
+    }
+
     async startStream(config: AudioConfig): Promise<void> {
         if (this.isActive) throw new Error("Stream already active.");
         this.isActive = true;
@@ -26,32 +39,12 @@ class AudioStreamManager implements StreamManager {
         // Initialize STT handler when stream starts
         this.sttHandler = await streamSTT(
             (transcription) => {
-                // Handle transcription callback
-                console.log("Transcription received:", transcription);
                 this.handleTranscription(transcription);
             },
             config.sampleRate
         );
         
         console.log("Stream started with config:", config);
-    }
-
-    private handleTranscription(text: string): void {
-        this.transcriptions.push(text);
-        const message: TranscriptionMessage = {
-            type: 'transcription',
-            transcription: text
-        };
-        // Emit or handle the transcription message
-        console.log("Transcription message:", message);
-    }
-
-    async processAudioChunk(chunk: Buffer): Promise<void> {
-        if (!this.isActive) throw new Error("Stream is not active.");
-        if (!this.sttHandler) throw new Error("STT handler not initialized.");
-        
-        console.log(`Processing audio chunk of size: ${chunk.length}`);
-        await this.sttHandler.sendAudioChunk(chunk);
     }
 
     async stopStream(): Promise<string[]> {
@@ -85,7 +78,7 @@ class AudioStreamManager implements StreamManager {
         return this.isActive;
     }
 
-    public getAllTranscriptions(): string[] {
+    getAllTranscriptions(): string[] {
         return this.transcriptions;
     }
 }
@@ -97,3 +90,4 @@ interface STTHandler {
     sendAudioChunk: (chunk: Buffer) => Promise<void>;
     close: () => Promise<void>;
 }
+
