@@ -36,9 +36,7 @@ export async function streamSTT(
     transcriber.on("transcript", (transcript: RealtimeTranscript) => {
         if (!transcript.text) return;
 
-        if (transcript.message_type === "PartialTranscript") {
-            console.log("Partial:", transcript.text);
-        } else {
+        if (transcript.message_type === "FinalTranscript") {
             console.log("Final:", transcript.text);
             onTranscription(transcript.text);
         }
@@ -49,7 +47,6 @@ export async function streamSTT(
 
     return {
         sendAudioChunk: async (chunk: Buffer) => {
-            console.log(`Sending chunk to AssemblyAI, size: ${chunk.length}`);
             transcriber.sendAudio(chunk);
         },
         close: async () => {
