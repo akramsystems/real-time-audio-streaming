@@ -2,7 +2,7 @@
 
 An agent designed for real-time interaction with a large language model (LLM) using voice. This project allows users to stream audio in real-time, process it with speech-to-text (STT) services, and interact with an LLM to receive responses, which can then be converted back to audio using text-to-speech (TTS) services.
 
-# Notes on Implementation
+## Notes on Implementation
 
 - This is my first typescript project and I'm not sure if I'm doing everything correctly. which is why I'm using the native ws module instead of a library like socket.io. In the future we may want to consider using a library which might make the sending / recieving and management of messages between our websockets more simple, (they probably have better abstractions than me).
 
