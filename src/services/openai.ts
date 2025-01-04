@@ -12,21 +12,20 @@ export async function processTranscription(transcription: string): Promise<strin
             messages: [
                 {
                     role: "system",
-                    content: "You are a helpful assistant. Answer any questions posed in the user's message clearly and concisely."
+                    content: "You are a helpful assistant. Answer questions clearly and concisely.",
                 },
                 {
                     role: "user",
-                    content: transcription
-                }
+                    content: transcription,
+                },
             ],
             temperature: 0.7,
         });
-
-        console.log("OpenAI Response:", completion.choices[0].message.content);
-
-        return completion.choices[0].message.content || "Sorry, I couldn't generate a response.";
+        const content = completion.choices[0].message.content;
+        console.log("OpenAI Response:", content);
+        return content || "Sorry, I couldn't generate a response.";
     } catch (error) {
-        console.error('Error calling OpenAI:', error);
-        throw new Error('Failed to process transcription with OpenAI');
+        console.error("Error calling OpenAI:", error);
+        throw new Error("Failed to process transcription with OpenAI");
     }
 }

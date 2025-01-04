@@ -15,75 +15,47 @@ export async function streamTTS(
   voiceId: string = "Xb7hH8MSUJpSbSDYk0k2",
   modelId: string = "eleven_turbo_v2"
 ): Promise<TTSHandler> {
-  const ELEVENLABS_API_KEY = config.ELEVENLABS_API_KEY;
-
   const emitter = new EventEmitter() as TTSHandler;
-  const uri = `wss://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream-input?model_id=${modelId}`;
+  const ws = new WebSocket(
+    `wss://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream-input?model_id=${modelId}`,
+    {
+      headers: { "xi-api-key": config.ELEVENLABS_API_KEY },
+    }
+  );
 
-  // Create the WebSocket
-  const ws = new WebSocket(uri, {
-    headers: {
-      "xi-api-key": ELEVENLABS_API_KEY, // ensure no extra spaces
-    },
-  });
-
-  // When WebSocket connects, send three chunks (init placeholder, actual text, empty)
   ws.on("open", () => {
-    // chunk #1: placeholder text + voice settings + generation config
+    // NOTE: This follows the pattern of the elevenlabs api docs
     ws.send(
       JSON.stringify({
         text: " ",
-        voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.8,
-          use_speaker_boost: false,
-        },
-        generation_config: {
-          chunk_length_schedule: [120, 160, 250, 290],
-        },
+        voice_settings: { stability: 0.5, similarity_boost: 0.8, use_speaker_boost: false },
+        generation_config: { chunk_length_schedule: [120, 160, 250, 290] },
       })
     );
-
-    // chunk #2: the actual text
     ws.send(JSON.stringify({ text }));
-
-    // chunk #3: empty string to signal end of text
     ws.send(JSON.stringify({ text: "" }));
   });
 
-  // Listen for messages (audio chunks)
-  ws.on("message", (rawData) => {
+  ws.on("message", (raw) => {
     try {
-      const parsed = JSON.parse(rawData.toString());
+      const parsed = JSON.parse(raw.toString());
       if (parsed.audio) {
         const audioBuffer = Buffer.from(parsed.audio, "base64");
-        // Emit an 'audio' event with the raw Buffer
         emitter.emit("audio", audioBuffer);
       }
-      // If ElevenLabs eventually sends isFinal or close, you could handle that here.
     } catch (err) {
       emitter.emit("error", err);
     }
   });
 
-  // When the server closes the WS, emit 'close'
-  ws.on("close", () => {
-    emitter.emit("close");
-  });
+  ws.on("close", () => emitter.emit("close"));
+  ws.on("error", (error) => emitter.emit("error", error));
 
-  // Forward errors to your emitter
-  ws.on("error", (error) => {
-    emitter.emit("error", error);
-  });
-
-  // Attach the TTSHandler methods
   emitter.sendText = async (newText: string) => {
-    // If you plan to send additional text chunks after the first,
-    // you can do that here. For a single prompt, you often won’t need this.
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ text: newText }));
     } else {
-      console.warn("WebSocket not open. Cannot send text");
+      console.warn("WebSocket not open. Cannot send text.");
     }
   };
 

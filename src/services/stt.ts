@@ -8,25 +8,17 @@ interface STTHandler {
 
 export async function streamSTT(
     onTranscription: (text: string) => void,
-    sampleRate: number = 16_000
+    sampleRate = 16000
 ): Promise<STTHandler> {
-    // Initialize AssemblyAI client
-    const client = new AssemblyAI({
-        apiKey: config.ASSEMBLY_AI_API_KEY,
-    });
+    const client = new AssemblyAI({ apiKey: config.ASSEMBLY_AI_API_KEY });
+    const transcriber = client.realtime.transcriber({ sampleRate });
 
-    // Create a real-time transcriber
-    const transcriber = client.realtime.transcriber({
-        sampleRate: sampleRate,
-    });
-
-    // Register event handlers
     transcriber.on("open", ({ sessionId }) => {
         console.log(`Session opened with ID: ${sessionId}`);
     });
 
     transcriber.on("error", (error: Error) => {
-        console.error("Error:", error);
+        console.error("AssemblyAI error:", error);
     });
 
     transcriber.on("close", (code: number, reason: string) => {
@@ -34,23 +26,21 @@ export async function streamSTT(
     });
 
     transcriber.on("transcript", (transcript: RealtimeTranscript) => {
-        if (!transcript.text) return;
-
-        if (transcript.message_type === "FinalTranscript") {
+        if (transcript.text && transcript.message_type === "FinalTranscript") {
             console.log("Final:", transcript.text);
             onTranscription(transcript.text);
         }
     });
 
-    console.log("Connecting to real-time transcript service");
+    console.log("Connecting to real-time transcript service.");
     await transcriber.connect();
 
     return {
-        sendAudioChunk: async (chunk: Buffer) => {
+        async sendAudioChunk(chunk: Buffer) {
             transcriber.sendAudio(chunk);
         },
-        close: async () => {
-            console.log("Closing AssemblyAI transcriber connection");
+        async close() {
+            console.log("Closing AssemblyAI transcriber connection.");
             await transcriber.close();
         },
     };
