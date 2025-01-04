@@ -3,10 +3,6 @@ import {
     AudioConfig, 
     WebSocketMessage,
     ConfigMessage,
-    ErrorMessage,
-    AiResponseMessage,
-    AudioChunkMessage,
-    EndAudioChunkMessage
 } from "../types";
 import { processTranscription } from "../services/openai";
 import { StreamHandler } from "../types";
@@ -59,7 +55,7 @@ class WebSocketHandler implements StreamHandler {
                 response: aiResponse
             });
 
-            const ttsHandler = await streamTTS(combinedTranscription);
+            const ttsHandler = await streamTTS(aiResponse);
             
             ttsHandler.on('audio', (audioData: Buffer) => {
                 this.ws.send(JSON.stringify({

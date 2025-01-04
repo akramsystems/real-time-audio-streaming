@@ -7,7 +7,7 @@ import {
     AudioStreamConfig,
     AudioEncoding 
 } from "../src/types";
-import { EventEmitter } from "events";
+import crypto from "crypto";
 
 const WEBSOCKET_URL = "ws://localhost:8080";
 
@@ -32,7 +32,8 @@ function createConfigMessage(): ConfigMessage {
 
 async function mimicAudioStream() {
     const ws = new WebSocket(WEBSOCKET_URL);
-    const writeStream = fs.createWriteStream("output.mp3");
+    const randomFileName = `output-${crypto.randomBytes(4).toString('hex')}.mp3`;
+    const writeStream = fs.createWriteStream(randomFileName);
 
     ws.on("open", () => {
         console.log("Connected to the WebSocket server.");
@@ -50,7 +51,7 @@ async function mimicAudioStream() {
         } else if (response.type === 'audio') {
             const audioBuffer = Buffer.from(response.data, "base64");
             writeStream.write(audioBuffer);
-            console.log("Audio saved to output.mp3");
+            console.log(`Audio saved to ${randomFileName}`);
         } else if (response.error) {
             console.error("Error from server:", response.error);
         }
